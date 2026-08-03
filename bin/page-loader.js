@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import pageLoader from '../src/index.js';
 
 const program = new Command();
 
@@ -10,8 +11,14 @@ program
   .arguments('<url>')
   .option('-o, --output [dir]', 'output directory', process.cwd())
   .action((url, options) => {
-    console.log(`URL to download: ${url}`);
-    console.log(`Output directory: ${options.output}`);
+    pageLoader(url, options.output)
+      .then((savedPath) => {
+        console.log(savedPath); // Программа должна возвращать полный путь в консоль
+      })
+      .catch((error) => {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+      });
   });
 
 program.parse(process.argv);
