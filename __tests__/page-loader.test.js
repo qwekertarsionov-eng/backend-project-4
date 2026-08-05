@@ -5,36 +5,49 @@ import os from 'os';
 import nock from 'nock';
 import pageLoader from '../src/index.js';
 
-// Отключаем реальную сеть для тестов
 nock.disableNetConnect();
 
 let tempDir;
 
 beforeEach(async () => {
-  // Создаем изолированную временную директорию перед каждым тестом
   tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'page-loader-'));
 });
 
-test('download base html page', async () => {
-  const url = 'https://ru.hexlet.io/courses';
-  
-  // Контент фикстуры, который якобы вернет сеть
-  const fixturePath = path.resolve(process.cwd(), '__fixtures__', 'before.html');
-  const expectedContent = await fs.readFile(fixturePath, 'utf-8');
+test('download html and its assets (images)', async () => {
+  const baseUrl = 'https://ru.hexlet.io';
+  const pageUrl = `${baseUrl}/courses`;
 
-  // Мокаем сетевой запрос через nock
-  nock('https://ru.hexlet.io')
+  // Загружаем контент фикстур
+  const htmlBefore = await fs.readFile(path.resolve('__fixtures__', 'before.html'), 'utf-8');
+  const htmlAfter = await fs.readFile(path.resolve('__fixtures__', 'after.html'), 'utf-8');
+  const imgFixture = await fs.readFile(path.resolve('__fixtures__', 'nodejs.png'));
+
+  // Имитируем запросы к сети
+  nock(baseUrl)
     .get('/courses')
-    .reply(200, expectedContent);
+    .reply(200, htmlBefore);
 
-  // Вызываем функцию скачивания
-  const resultFilePath = await pageLoader(url, tempDir);
-  const expectedFileName = 'ru-hexlet-io-courses.html';
+  nock(baseUrl)
+    .get('/assets/professions/nodejs.png')
+    .reply(200, imgFixture, { 'content-type': 'image/png' });
 
-  // Проверяем, что утилита вернула полный путь к файлу
-  expect(resultFilePath).toBe(path.join(tempDir, expectedFileName));
+  // Запускаем
+  const resultHtmlPath = await pageLoader(pageUrl, tempDir);
 
-  // Проверяем, что контент записался корректно
-  const savedContent = await fs.readFile(resultFilePath, 'utf-8');
-  expect(savedContent).toBe(expectedContent);
+  // 1. Проверяем возвращаемый путь к HTML-файлу
+  expect(resultHtmlPath).toBe(path.join(tempDir, 'ru-hexlet-io-courses.html'));
+
+  // 2. Проверяем, что измененный HTML соответствует ожиданиям
+  const savedHtml = await fs.readFile(resultHtmlPath, 'utf-8');
+  // Используем регулярное выражение или cheerio.load, так как cheerio может менять форматирование
+  expect(savedHtml.replace(/\s+/g, '')).toBe(htmlAfter.replace(/\s+/g, ''));
+
+  // 3. Проверяем, что картинка скачалась в правильную папку
+  const expectedImgPath = path.join(
+    tempDir,
+    'ru-hexlet-io-courses_files',
+    'ru-hexlet-io-assets-professions-nodejs.png'
+  );
+  const savedImg = await fs.readFile(expectedImgPath);
+  expect(savedImg).toEqual(imgFixture);
 });
