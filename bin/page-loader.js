@@ -2,85 +2,29 @@
 
 import { Command } from 'commander';
 import { Listr } from 'listr2';
-import axios from 'axios';
-import fs from 'fs/promises';
-import path from 'path';
-import { extractAssets } from '../src/index.js';
-
-
-const convertUrlToSlug = (urlStr) => {
-  const urlWithoutProtocol = urlStr.replace(/^https?:\/\//, '');
-  const cleanStr = urlWithoutProtocol.endsWith('/') ? urlWithoutProtocol.slice(0, -1) : urlWithoutProtocol;
-  return cleanStr.replace(/[^a-zA-Z0-9]/g, '-');
-};
+import pageLoader from '../src/index.js';
 
 const program = new Command();
 
 program
   .version('1.0.0')
-  .description('Page loader utility with progress bar')
+  .description('Page loader utility')
   .arguments('<url>')
   .option('-o, --output [dir]', 'output directory', process.cwd())
   .action((url, options) => {
-    const outputDir = options.output;
-    const baseSlug = convertUrlToSlug(url);
-    const mainHtmlPath = path.join(outputDir, `${baseSlug}.html`);
-    const assetsDirname = `${baseSlug}_files`;
-    const assetsDirPath = path.join(outputDir, assetsDirname);
+    const outputDir = options.output || process.cwd();
 
-    let htmlData = '';
-    let modifiedHtml = '';
-    let assets = [];
-
-    // Создаем менеджер задач Listr
+    // Запускаем красивый трекер Listr вокруг единой функции
     const tasks = new Listr([
       {
-        title: `Fetching main page: ${url}`,
-        task: () => {
-          return axios.get(url).then((response) => {
-            htmlData = response.data;
-          });
-        },
-      },
-      {
-        title: 'Parsing page assets and links',
-        task: () => {
-          const result = extractAssets(htmlData, url, assetsDirname, assetsDirPath);
-          modifiedHtml = result.modifiedHtml;
-          assets = result.assets;
-        },
-      },
-      {
-        title: 'Downloading local resources',
-        skip: () => assets.length === 0 ? 'No local assets found.' : false,
-        task: (ctx, task) => {
-          // Создаем директорию для ресурсов
-          return fs.mkdir(assetsDirPath, { recursive: true }).then(() => {
-            // Генерируем массив параллельных подзадач
-            return task.newListr(
-              assets.map((asset) => ({
-                title: `Downloading ${asset.filename}`,
-                task: () => {
-                  return axios.get(asset.url, { responseType: 'arraybuffer' })
-                    .then((res) => fs.writeFile(asset.savePath, res.data));
-                },
-              })),
-              { concurrent: true, exitOnError: true } // Флаг ОДНОВРЕМЕННОЙ параллельной загрузки
-            );
-          });
-        },
-      },
-      {
-        title: `Saving final HTML page to ${mainHtmlPath}`,
-        task: () => {
-          return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8');
-        },
+        title: `Downloading page and assets from ${url}`,
+        task: () => pageLoader(url, outputDir),
       },
     ]);
 
     tasks.run()
-      .then(() => {
-        console.log(`\nSuccess: Page was successfully downloaded into ${mainHtmlPath}`);
+      .then((savedPath) => {
+        console.log(`Success: Page was successfully downloaded into ${savedPath}`);
       })
       .catch((error) => {
         if (error.code === 'ENOENT') {
@@ -97,3 +41,4 @@ program
   });
 
 program.parse(process.argv);
+
