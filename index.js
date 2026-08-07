@@ -33,8 +33,12 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
   const originUrl = new URL(pageUrl);
   let assetsToDownload = [];
 
-  logApi('sending GET request to main page: %s', pageUrl);
-  return axios.get(pageUrl)
+  // СНАЧАЛА ПРОВЕРЯЕМ: существует ли директория назначения и есть ли права на запись
+  return fs.access(outputDir)
+    .then(() => {
+      logApi('sending GET request to main page: %s', pageUrl);
+      return axios.get(pageUrl);
+    })
     .then((response) => {
       logApi('main page loaded successfully');
       const $ = cheerio.load(response.data);
