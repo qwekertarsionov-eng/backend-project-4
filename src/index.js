@@ -3,12 +3,16 @@ import path from 'path';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-// Превращает URL в базовую строку-имя (без расширения)
 const convertUrlToSlug = (urlStr) => {
-  const url = new URL(urlStr);
-  const combined = `${url.host}${url.pathname}`;
-  const clean = combined.endsWith('/') ? combined.slice(0, -1) : combined;
-  return clean.replace(/[^a-zA-Z0-9]/g, '-');
+  const urlWithoutProtocol = urlStr.replace(/^https?:\/\//, '');
+  const cleanStr = urlWithoutProtocol.endsWith('/') ? urlWithoutProtocol.slice(0, -1) : urlWithoutProtocol;
+  return cleanStr.replace(/[^a-zA-Z0-9]/g, '-');
+};
+
+const resourceTags = {
+  img: 'src',
+  link: 'href',
+  script: 'src',
 };
 
 const pageLoader = (pageUrl, outputDir = process.cwd()) => {
@@ -20,63 +24,72 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
   const assetsDirPath = path.join(outputDir, assetsDirname);
 
   const originUrl = new URL(pageUrl);
-  let assetsToDownload = []; // Массив объектов { downloadUrl, savePath }
+  let assetsToDownload = [];
 
   return axios.get(pageUrl)
     .then((response) => {
       const $ = cheerio.load(response.data);
 
-      // Ищем все теги img
-      $('img').each((_, element) => {
-        const src = $(element).attr('src');
-        if (!src) return;
+      Object.entries(resourceTags).forEach(([tagName, attrName]) => {
+        $(tagName).each((_, element) => {
+          const attrValue = $(element).attr(attrName);
+          if (!attrValue) return;
 
-        // Строим полный URL для скачивания (поддерживает как абсолютные, так и относительные пути)
-        const assetUrl = new URL(src, originUrl.origin);
+          const assetUrl = new URL(attrValue, originUrl.href);
 
-        // Скачиваем только ресурсы с того же домена, что и страница
-        if (assetUrl.origin === originUrl.origin) {
-          const extension = path.extname(assetUrl.pathname) || '.png';
-          // Убираем расширение из пути для формирования имени
-          const pathWithoutExt = assetUrl.pathname.substring(0, assetUrl.pathname.length - extension.length);
-          const assetSlug = `${assetUrl.host}${pathWithoutExt}`.replace(/[^a-zA-Z0-9]/g, '-');
-          const assetFilename = `${assetSlug}${extension}`;
+          // Проверяем локальность хоста (строгое совпадение домена)
+          if (assetUrl.hostname === originUrl.hostname) {
 
-          const localPathForHtml = path.join(assetsDirname, assetFilename);
-          const absoluteSavePath = path.join(assetsDirPath, assetFilename);
+            // Специальная обработка, если ресурс ссылается на саму скачиваемую страницу (например, canonical)
+            if (assetUrl.pathname === originUrl.pathname && tagName === 'link' && $(element).attr('rel') === 'canonical') {
+              const localPathForHtml = path.join(assetsDirname, mainHtmlFilename);
+              $(element).attr(attrName, localPathForHtml);
+              return;
+            }
 
-          // Меняем ссылку внутри HTML
-          $(element).attr('src', localPathForHtml);
+            const extension = path.extname(assetUrl.pathname) || '.html';
 
-          // Добавляем в очередь на скачивание
-          assetsToDownload.push({
-            downloadUrl: assetUrl.toString(),
-            savePath: absoluteSavePath,
-          });
-        }
+            // Формируем имя файла ресурса БЕЗ хрупких substring:
+            const hostAndPath = `${assetUrl.host}${assetUrl.pathname}`;
+            const cleanHostAndPath = hostAndPath.endsWith(extension)
+              ? hostAndPath.substring(0, hostAndPath.length - extension.length)
+              : hostAndPath;
+
+            const assetSlug = cleanHostAndPath.replace(/[^a-zA-Z0-9]/g, '-');
+            const assetFilename = `${assetSlug}${extension}`;
+
+            const localPathForHtml = path.join(assetsDirname, assetFilename);
+            const absoluteSavePath = path.join(assetsDirPath, assetFilename);
+
+            assetsToDownload.push({
+              downloadUrl: assetUrl.toString(),
+              savePath: absoluteSavePath,
+            });
+
+            $(element).attr(attrName, localPathForHtml);
+          }
+        });
       });
 
-      // Передаем измененный html-код и очередь дальше по цепочке
       return $.html();
     })
     .then((modifiedHtml) => {
-      // Создаем директорию для ресурсов, если в очереди что-то есть
       if (assetsToDownload.length === 0) {
-        return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8');
+        return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8')
+          .then(() => mainHtmlPath);
       }
 
       return fs.mkdir(assetsDirPath, { recursive: true })
         .then(() => {
-          // Скачиваем все ресурсы параллельно через Promise.all
           const promises = assetsToDownload.map((asset) => {
             return axios.get(asset.downloadUrl, { responseType: 'arraybuffer' })
               .then((res) => fs.writeFile(asset.savePath, res.data));
           });
           return Promise.all(promises);
         })
-        .then(() => fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8'));
-    })
-    .then(() => mainHtmlPath); // Возвращаем путь к главному файлу
+        .then(() => fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8'))
+        .then(() => mainHtmlPath);
+    });
 };
 
 export default pageLoader;
