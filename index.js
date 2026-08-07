@@ -50,18 +50,9 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           const assetUrl = new URL(attrValue, originUrl.href);
 
           if (assetUrl.hostname === originUrl.hostname) {
-            // Если ссылка ведет ровно на саму скачиваемую страницу и это canonical — просто меняем ссылку на локальный главный файл
-            if (assetUrl.pathname === originUrl.pathname && tagName === 'link' && $(element).attr('rel') === 'canonical') {
-              const localPathForHtml = path.join(assetsDirname, mainHtmlFilename);
-              $(element).attr(attrName, localPathForHtml);
-              return;
-            }
-
-            // Корректно извлекаем расширение. Если его нет в пути (например, /blog/about), то расширение — .html
             const originalExt = path.extname(assetUrl.pathname);
             const extension = originalExt || '.html';
             
-            // Получаем чистый путь без расширения для построения правильного слага
             const hostAndPath = `${assetUrl.host}${assetUrl.pathname}`;
             const cleanHostAndPath = originalExt
               ? hostAndPath.substring(0, hostAndPath.length - originalExt.length)
@@ -73,6 +64,7 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
+            // Скачиваем ресурс, даже если это ссылка на саму себя (как требует тест Хекслета)
             assetsToDownload.push({
               downloadUrl: assetUrl.toString(),
               savePath: absoluteSavePath,
@@ -97,7 +89,6 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
         .then(() => {
           const promises = assetsToDownload.map((asset) => {
             logApi('downloading asset: %s', asset.downloadUrl);
-            // Скачиваем ресурсы. arraybuffer отлично подходит и для бинарных, и для текстовых подресурсов
             return axios.get(asset.downloadUrl, { responseType: 'arraybuffer' })
               .then((res) => fs.writeFile(asset.savePath, res.data));
           });
