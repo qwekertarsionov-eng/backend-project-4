@@ -9,11 +9,10 @@ on:
 
 jobs:
   build:
-    runs-level: ubuntu-latest
+    runs-on: ubuntu-latest # ИСПРАВЛЕНО: вместо runs-level пишем runs-on
 
     strategy:
       matrix:
-        # Хекслет рекомендует тестировать на актуальных версиях Node.js (не ниже 20)
         node-version: [24.x]
 
     steps:
@@ -36,7 +35,7 @@ jobs:
       - name: Run linter
         run: npm run lint
 
-      # Шаг 5: Запуск тестов Jest с включенным дебагом (согласно требованиям шага отладки)
+      # Шаг 5: Запуск тестов Jest с включенным дебагом
       - name: Run tests
         run: npm test
         env:
