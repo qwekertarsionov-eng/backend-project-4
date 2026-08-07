@@ -1,45 +1,97 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import pageLoader from '../src/index.js';
+import { Listr } from 'listr2';
+import axios from 'axios';
+import fs from 'fs/promises';
+import path from 'path';
+import { extractAssets } from '../src/index.js';
+
+
+const convertUrlToSlug = (urlStr) => {
+  const urlWithoutProtocol = urlStr.replace(/^https?:\/\//, '');
+  const cleanStr = urlWithoutProtocol.endsWith('/') ? urlWithoutProtocol.slice(0, -1) : urlWithoutProtocol;
+  return cleanStr.replace(/[^a-zA-Z0-9]/g, '-');
+};
 
 const program = new Command();
 
 program
   .version('1.0.0')
-  .description('Page loader utility with robust error handling')
+  .description('Page loader utility with progress bar')
   .arguments('<url>')
   .option('-o, --output [dir]', 'output directory', process.cwd())
   .action((url, options) => {
-    pageLoader(url, options.output)
-      .then((savedPath) => {
-        console.log(`Page was successfully downloaded into ${savedPath}`);
+    const outputDir = options.output;
+    const baseSlug = convertUrlToSlug(url);
+    const mainHtmlPath = path.join(outputDir, `${baseSlug}.html`);
+    const assetsDirname = `${baseSlug}_files`;
+    const assetsDirPath = path.join(outputDir, assetsDirname);
+
+    let htmlData = '';
+    let modifiedHtml = '';
+    let assets = [];
+
+    // Создаем менеджер задач Listr
+    const tasks = new Listr([
+      {
+        title: `Fetching main page: ${url}`,
+        task: () => {
+          return axios.get(url).then((response) => {
+            htmlData = response.data;
+          });
+        },
+      },
+      {
+        title: 'Parsing page assets and links',
+        task: () => {
+          const result = extractAssets(htmlData, url, assetsDirname, assetsDirPath);
+          modifiedHtml = result.modifiedHtml;
+          assets = result.assets;
+        },
+      },
+      {
+        title: 'Downloading local resources',
+        skip: () => assets.length === 0 ? 'No local assets found.' : false,
+        task: (ctx, task) => {
+          // Создаем директорию для ресурсов
+          return fs.mkdir(assetsDirPath, { recursive: true }).then(() => {
+            // Генерируем массив параллельных подзадач
+            return task.newListr(
+              assets.map((asset) => ({
+                title: `Downloading ${asset.filename}`,
+                task: () => {
+                  return axios.get(asset.url, { responseType: 'arraybuffer' })
+                    .then((res) => fs.writeFile(asset.savePath, res.data));
+                },
+              })),
+              { concurrent: true, exitOnError: true } // Флаг ОДНОВРЕМЕННОЙ параллельной загрузки
+            );
+          });
+        },
+      },
+      {
+        title: `Saving final HTML page to ${mainHtmlPath}`,
+        task: () => {
+          return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8');
+        },
+      },
+    ]);
+
+    tasks.run()
+      .then(() => {
+        console.log(`\nSuccess: Page was successfully downloaded into ${mainHtmlPath}`);
       })
       .catch((error) => {
-        // 1. Обработка ошибок файловой системы (FS errors)
         if (error.code === 'ENOENT') {
-          console.error(`Error: Directory or file not found. Please check your output path: "${options.output}"`);
+          console.error(`Error: Directory not found: "${outputDir}"`);
         } else if (error.code === 'EACCES') {
-          console.error(`Error: Permission denied. You do not have write access to "${options.output}"`);
-        }
-        // 2. Обработка сетевых ошибок (Axios / Network errors)
-        else if (error.isAxiosError) {
-          const targetUrl = error.config ? error.config.url : url;
-
-          if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT' || error.code === 'ENETUNREACH') {
-            console.error(`Error: Network connection failed for "${targetUrl}". Please check your internet connection.`);
-          } else if (error.response) {
-            console.error(`Error: Server responded with status code ${error.response.status} for resource "${targetUrl}"`);
-          } else {
-            console.error(`Error: Failed to fetch resource "${targetUrl}" (${error.message})`);
-          }
-        }
-        // 3. Непредвиденные системные ошибки
-        else {
+          console.error(`Error: Permission denied for "${outputDir}"`);
+        } else if (error.isAxiosError) {
+          console.error(`Error: Network failed (${error.message})`);
+        } else {
           console.error(`An unexpected error occurred: ${error.message}`);
         }
-
-        // Обязательно возвращаем ненулевой код завершения утилиты
         process.exit(1);
       });
   });
