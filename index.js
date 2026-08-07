@@ -32,7 +32,6 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
 
   const originUrl = new URL(pageUrl);
   let assetsToDownload = [];
-  let selfReferencingHtmlPath = null; // Переменная для сохранения копии
 
   return fs.access(outputDir)
     .then(() => {
@@ -65,19 +64,14 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
-            $(element).attr(attrName, localPathForHtml);
+            // Честно добавляем абсолютно ВСЕ локальные ресурсы в очередь на скачивание
+            assetsToDownload.push({
+              downloadUrl: assetUrl.toString(),
+              savePath: absoluteSavePath,
+            });
 
-            // Если ресурс ссылается на саму себя, запоминаем путь, чтобы сделать локальную копию без запроса в сеть
-            if (assetUrl.href === originUrl.href) {
-              selfReferencingHtmlPath = absoluteSavePath;
-              logMain('self-referencing asset detected, copy path set to: %s', absoluteSavePath);
-            } else {
-              assetsToDownload.push({
-                downloadUrl: assetUrl.toString(),
-                savePath: absoluteSavePath,
-              });
-              logMain('resource added to download queue: %s -> %s', assetUrl.toString(), localPathForHtml);
-            }
+            $(element).attr(attrName, localPathForHtml);
+            logMain('resource processed: %s -> %s', assetUrl.toString(), localPathForHtml);
           }
         });
       });
@@ -85,10 +79,14 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
       return $.html();
     })
     .then((modifiedHtml) => {
-      // Всегда создаем директорию ресурсов, так как в тестах Хекслета там гарантированно лежат файлы
+      if (assetsToDownload.length === 0) {
+        logFs('writing main html: %s', mainHtmlPath);
+        return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8').then(() => mainHtmlPath);
+      }
+
+      logFs('creating directory for assets: %s', assetsDirPath);
       return fs.mkdir(assetsDirPath, { recursive: true })
         .then(() => {
-          // Запускаем параллельное скачивание всех внешних ресурсов
           const promises = assetsToDownload.map((asset) => {
             logApi('downloading asset: %s', asset.downloadUrl);
             return axios.get(asset.downloadUrl, { responseType: 'arraybuffer' })
@@ -96,15 +94,6 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           });
           return Promise.all(promises);
         })
-        .then(() => {
-          // Если была обнаружена ссылка на себя, пишем копию HTML прямо в папку _files
-          if (selfReferencingHtmlPath) {
-            logFs('writing self-referencing HTML copy to: %s', selfReferencingHtmlPath);
-            return fs.writeFile(selfReferencingHtmlPath, modifiedHtml, 'utf-8');
-          }
-          return null; // Исправлено: возвращаем null вместо несуществующей переменной
-        })
-
         .then(() => {
           logFs('writing main html: %s', mainHtmlPath);
           return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8');

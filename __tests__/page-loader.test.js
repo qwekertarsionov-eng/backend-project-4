@@ -21,8 +21,8 @@ test('download html and all local assets matching assignment fixtures', async ()
   const htmlBefore = await fs.readFile(path.resolve('__fixtures__', 'before.html'), 'utf-8');
   const htmlAfter = await fs.readFile(path.resolve('__fixtures__', 'after.html'), 'utf-8');
 
-  // Перехватываем реальные локальные файлы
-  nock(baseUrl).get('/courses').reply(200, htmlBefore);
+  // Измените строку перехвата основной страницы, добавив .times(2)
+  nock(baseUrl).get('/courses').times(2).reply(200, htmlBefore);
   nock(baseUrl).get('/assets/application.css').reply(200, 'css-content');
   nock(baseUrl).get('/assets/professions/nodejs.png').reply(200, 'png-content');
   nock(baseUrl).get('/packs/js/runtime.js').reply(200, 'js-content');
