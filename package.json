@@ -10,6 +10,7 @@
     "axios": "^1.19.0",
     "cheerio": "^1.2.0",
     "commander": "^15.0.0",
+    "debug": "^4.4.3",
     "listr2": "^11.0.0"
   },
   "devDependencies": {
