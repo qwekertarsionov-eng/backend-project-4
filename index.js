@@ -64,14 +64,19 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
-            // Скачиваем ресурс, даже если это ссылка на саму себя (как требует тест Хекслета)
-            assetsToDownload.push({
-              downloadUrl: assetUrl.toString(),
-              savePath: absoluteSavePath,
-            });
-
+            // МЕНЯЕМ ССЫЛКУ В HTML ВСЕГДА
             $(element).attr(attrName, localPathForHtml);
-            logMain('resource processed: %s -> %s', assetUrl.toString(), localPathForHtml);
+
+            // ИСПРАВЛЕНИЕ: Пушим в очередь на скачивание ТОЛЬКО если это не сама открытая страница!
+            if (assetUrl.href !== originUrl.href) {
+              assetsToDownload.push({
+                downloadUrl: assetUrl.toString(),
+                savePath: absoluteSavePath,
+              });
+              logMain('resource added to download queue: %s -> %s', assetUrl.toString(), localPathForHtml);
+            } else {
+              logMain('self-referencing asset skipped from network download: %s', assetUrl.toString());
+            }
           }
         });
       });
