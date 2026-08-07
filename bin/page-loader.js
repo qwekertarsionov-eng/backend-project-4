@@ -2,7 +2,9 @@
 
 import { Command } from 'commander';
 import { Listr } from 'listr2';
-import pageLoader from '../src/index.js';
+import pageLoader from '../index.js';
+
+
 
 const program = new Command();
 
