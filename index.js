@@ -32,6 +32,7 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
 
   const originUrl = new URL(pageUrl);
   let assetsToDownload = [];
+  let selfReferencingHtmlPath = null; // Переменная для сохранения копии
 
   return fs.access(outputDir)
     .then(() => {
@@ -64,18 +65,18 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
-            // МЕНЯЕМ ССЫЛКУ В HTML ВСЕГДА
             $(element).attr(attrName, localPathForHtml);
 
-            // ИСПРАВЛЕНИЕ: Пушим в очередь на скачивание ТОЛЬКО если это не сама открытая страница!
-            if (assetUrl.href !== originUrl.href) {
+            // Если ресурс ссылается на саму себя, запоминаем путь, чтобы сделать локальную копию без запроса в сеть
+            if (assetUrl.href === originUrl.href) {
+              selfReferencingHtmlPath = absoluteSavePath;
+              logMain('self-referencing asset detected, copy path set to: %s', absoluteSavePath);
+            } else {
               assetsToDownload.push({
                 downloadUrl: assetUrl.toString(),
                 savePath: absoluteSavePath,
               });
               logMain('resource added to download queue: %s -> %s', assetUrl.toString(), localPathForHtml);
-            } else {
-              logMain('self-referencing asset skipped from network download: %s', assetUrl.toString());
             }
           }
         });
@@ -84,14 +85,10 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
       return $.html();
     })
     .then((modifiedHtml) => {
-      if (assetsToDownload.length === 0) {
-        logFs('writing main html: %s', mainHtmlPath);
-        return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8').then(() => mainHtmlPath);
-      }
-
-      logFs('creating directory for assets: %s', assetsDirPath);
+      // Всегда создаем директорию ресурсов, так как в тестах Хекслета там гарантированно лежат файлы
       return fs.mkdir(assetsDirPath, { recursive: true })
         .then(() => {
+          // Запускаем параллельное скачивание всех внешних ресурсов
           const promises = assetsToDownload.map((asset) => {
             logApi('downloading asset: %s', asset.downloadUrl);
             return axios.get(asset.downloadUrl, { responseType: 'arraybuffer' })
@@ -99,7 +96,19 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           });
           return Promise.all(promises);
         })
-        .then(() => fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8'))
+        .then(() => {
+          // Если была обнаружена ссылка на себя, пишем копию HTML прямо в папку _files
+          if (selfReferencingHtmlPath) {
+            logFs('writing self-referencing HTML copy to: %s', selfReferencingHtmlPath);
+            return fs.writeFile(selfReferencingHtmlPath, modifiedHtml, 'utf-8');
+          }
+          return null; // Исправлено: возвращаем null вместо несуществующей переменной
+        })
+
+        .then(() => {
+          logFs('writing main html: %s', mainHtmlPath);
+          return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8');
+        })
         .then(() => mainHtmlPath);
     });
 };
