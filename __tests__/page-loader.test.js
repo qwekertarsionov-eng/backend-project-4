@@ -20,7 +20,7 @@ test('download html and all local assets matching assignment fixtures', async ()
   const htmlBefore = await fs.readFile(path.resolve('__fixtures__', 'before.html'), 'utf-8');
   const htmlAfter = await fs.readFile(path.resolve('__fixtures__', 'after.html'), 'utf-8');
 
-  // Перехватываем только реальные локальные файлы
+  // Перехватываем реальные локальные файлы
   nock(baseUrl).get('/courses').reply(200, htmlBefore);
   nock(baseUrl).get('/assets/application.css').reply(200, 'css-content');
   nock(baseUrl).get('/assets/professions/nodejs.png').reply(200, 'png-content');
@@ -40,4 +40,32 @@ test('download html and all local assets matching assignment fixtures', async ()
   await expect(fs.access(path.join(filesDir, 'ru-hexlet-io-assets-application.css'))).resolves.not.toThrow();
   await expect(fs.access(path.join(filesDir, 'ru-hexlet-io-assets-professions-nodejs.png'))).resolves.not.toThrow();
   await expect(fs.access(path.join(filesDir, 'ru-hexlet-io-packs-js-runtime.js'))).resolves.not.toThrow();
+});
+
+test('should throw error when main page returns 404', async () => {
+  nock('https://ru.hexlet.io')
+    .get('/invalid-page')
+    .reply(404);
+
+  await expect(pageLoader('https://hexlet.io', tempDir)).rejects.toThrow();
+});
+
+test('should throw error when asset returns 500', async () => {
+  const htmlBefore = '<img src="/assets/professions/nodejs.png" />';
+  nock('https://ru.hexlet.io').get('/courses').reply(200, htmlBefore);
+  nock('https://ru.hexlet.io').get('/assets/professions/nodejs.png').reply(500);
+
+  await expect(pageLoader('https://ru.hexlet.io/courses', tempDir)).rejects.toThrow();
+});
+
+test('should throw error when output directory does not exist', async () => {
+  nock('https://ru.hexlet.io').get('/courses').reply(200, '<html></html>');
+
+  await expect(pageLoader('https://ru.hexlet.io/courses', '/non-existent-dir')).rejects.toThrow();
+});
+
+test('should throw error when permission denied', async () => {
+  nock('https://ru.hexlet.io').get('/courses').reply(200, '<html></html>');
+
+  await expect(pageLoader('https://ru.hexlet.io/courses', '/root')).rejects.toThrow();
 });
