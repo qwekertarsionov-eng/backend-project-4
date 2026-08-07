@@ -1,0 +1,43 @@
+name: CI
+
+# Запуск при каждом пуше или пулл-реквесте в основную ветку
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-level: ubuntu-latest
+
+    strategy:
+      matrix:
+        # Хекслет рекомендует тестировать на актуальных версиях Node.js (не ниже 20)
+        node-version: [24.x]
+
+    steps:
+      # Шаг 1: Скачивание кода репозитория
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Шаг 2: Установка окружения Node.js
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      # Шаг 3: Чистая установка зависимостей
+      - name: Install dependencies
+        run: npm ci
+
+      # Шаг 4: Запуск проверки стиля кода (линтера)
+      - name: Run linter
+        run: npm run lint
+
+      # Шаг 5: Запуск тестов Jest с включенным дебагом (согласно требованиям шага отладки)
+      - name: Run tests
+        run: npm test
+        env:
+          DEBUG: page-loader*,axios,nock
