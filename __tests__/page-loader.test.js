@@ -3,7 +3,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import nock from 'nock';
-import pageLoader from '../src/index.js';
+import pageLoader from '../index.js';
+
 
 nock.disableNetConnect();
 
