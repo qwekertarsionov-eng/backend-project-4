@@ -26,14 +26,13 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
   const baseSlug = convertUrlToSlug(pageUrl);
   const mainHtmlFilename = `${baseSlug}.html`;
   const assetsDirname = `${baseSlug}_files`;
-
+  
   const mainHtmlPath = path.join(outputDir, mainHtmlFilename);
   const assetsDirPath = path.join(outputDir, assetsDirname);
-
+  
   const originUrl = new URL(pageUrl);
   let assetsToDownload = [];
 
-  // СНАЧАЛА ПРОВЕРЯЕМ: существует ли директория назначения и есть ли права на запись
   return fs.access(outputDir)
     .then(() => {
       logApi('sending GET request to main page: %s', pageUrl);
@@ -51,21 +50,26 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           const assetUrl = new URL(attrValue, originUrl.href);
 
           if (assetUrl.hostname === originUrl.hostname) {
+            // Если ссылка ведет ровно на саму скачиваемую страницу и это canonical — просто меняем ссылку на локальный главный файл
             if (assetUrl.pathname === originUrl.pathname && tagName === 'link' && $(element).attr('rel') === 'canonical') {
               const localPathForHtml = path.join(assetsDirname, mainHtmlFilename);
               $(element).attr(attrName, localPathForHtml);
               return;
             }
 
-            const extension = path.extname(assetUrl.pathname) || '.html';
+            // Корректно извлекаем расширение. Если его нет в пути (например, /blog/about), то расширение — .html
+            const originalExt = path.extname(assetUrl.pathname);
+            const extension = originalExt || '.html';
+            
+            // Получаем чистый путь без расширения для построения правильного слага
             const hostAndPath = `${assetUrl.host}${assetUrl.pathname}`;
-            const cleanHostAndPath = hostAndPath.endsWith(extension)
-              ? hostAndPath.substring(0, hostAndPath.length - extension.length)
+            const cleanHostAndPath = originalExt
+              ? hostAndPath.substring(0, hostAndPath.length - originalExt.length)
               : hostAndPath;
-
+              
             const assetSlug = cleanHostAndPath.replace(/[^a-zA-Z0-9]/g, '-');
             const assetFilename = `${assetSlug}${extension}`;
-
+            
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
@@ -75,6 +79,7 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
             });
 
             $(element).attr(attrName, localPathForHtml);
+            logMain('resource processed: %s -> %s', assetUrl.toString(), localPathForHtml);
           }
         });
       });
@@ -86,12 +91,13 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
         logFs('writing main html: %s', mainHtmlPath);
         return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8').then(() => mainHtmlPath);
       }
-
+      
       logFs('creating directory for assets: %s', assetsDirPath);
       return fs.mkdir(assetsDirPath, { recursive: true })
         .then(() => {
           const promises = assetsToDownload.map((asset) => {
             logApi('downloading asset: %s', asset.downloadUrl);
+            // Скачиваем ресурсы. arraybuffer отлично подходит и для бинарных, и для текстовых подресурсов
             return axios.get(asset.downloadUrl, { responseType: 'arraybuffer' })
               .then((res) => fs.writeFile(asset.savePath, res.data));
           });
