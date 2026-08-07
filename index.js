@@ -26,10 +26,10 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
   const baseSlug = convertUrlToSlug(pageUrl);
   const mainHtmlFilename = `${baseSlug}.html`;
   const assetsDirname = `${baseSlug}_files`;
-  
+
   const mainHtmlPath = path.join(outputDir, mainHtmlFilename);
   const assetsDirPath = path.join(outputDir, assetsDirname);
-  
+
   const originUrl = new URL(pageUrl);
   let assetsToDownload = [];
 
@@ -52,15 +52,15 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           if (assetUrl.hostname === originUrl.hostname) {
             const originalExt = path.extname(assetUrl.pathname);
             const extension = originalExt || '.html';
-            
+
             const hostAndPath = `${assetUrl.host}${assetUrl.pathname}`;
             const cleanHostAndPath = originalExt
               ? hostAndPath.substring(0, hostAndPath.length - originalExt.length)
               : hostAndPath;
-              
+
             const assetSlug = cleanHostAndPath.replace(/[^a-zA-Z0-9]/g, '-');
             const assetFilename = `${assetSlug}${extension}`;
-            
+
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
@@ -88,7 +88,7 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
         logFs('writing main html: %s', mainHtmlPath);
         return fs.writeFile(mainHtmlPath, modifiedHtml, 'utf-8').then(() => mainHtmlPath);
       }
-      
+
       logFs('creating directory for assets: %s', assetsDirPath);
       return fs.mkdir(assetsDirPath, { recursive: true })
         .then(() => {
