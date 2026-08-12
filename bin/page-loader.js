@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import pageLoader from '../src/index.js';
+import pageLoader from '../index.js';
 
 const program = new Command();
 
@@ -12,7 +12,6 @@ program
   .option('-o, --output [dir]', 'output directory', process.cwd())
   .action((url, options) => {
     const outputDir = options.output || process.cwd();
-
 
     pageLoader(url, outputDir)
       .then((savedPath) => {
