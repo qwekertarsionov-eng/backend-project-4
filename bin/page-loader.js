@@ -12,8 +12,8 @@ program
   .option('-o, --output [dir]', 'output directory', process.cwd())
   .action((url, options) => {
     const outputDir = options.output || process.cwd();
-    
-    
+
+
     pageLoader(url, outputDir)
       .then((savedPath) => {
         if (savedPath) {

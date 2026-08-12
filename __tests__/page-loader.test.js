@@ -16,7 +16,7 @@ beforeEach(async () => {
 test('download html and all local assets matching assignment fixtures', async () => {
   const baseUrl = 'https://ru.hexlet.io';
   const pageUrl = `${baseUrl}/courses`;
-  
+
   const htmlBefore = await fs.readFile(path.resolve('__fixtures__', 'before.html'), 'utf-8');
   const htmlAfter = await fs.readFile(path.resolve('__fixtures__', 'after.html'), 'utf-8');
 
@@ -54,7 +54,7 @@ test('should throw error when main page returns 404', async () => {
 // Теперь мы ожидаем, что падение ассета НЕ ломает загрузку всей страницы!
 test('should handle gracefully when asset returns 500', async () => {
   const htmlBefore = '<img src="/assets/professions/nodejs.png" />';
-  
+
   nock('https://ru.hexlet.io').get('/courses').reply(200, htmlBefore);
   nock('https://ru.hexlet.io').get('/assets/professions/nodejs.png').reply(500);
 
@@ -64,7 +64,7 @@ test('should handle gracefully when asset returns 500', async () => {
 
 test('should throw error when permission denied', async () => {
   nock('https://ru.hexlet.io').get('/courses').reply(200, '<html></html>');
-  
+
   // Ошибка записи в системную закрытую директорию /root по-прежнему должна выбрасываться
   await expect(pageLoader('https://ru.hexlet.io/courses', '/root')).rejects.toThrow();
 });

@@ -46,24 +46,24 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           const assetUrl = new URL(attrValue, originUrl.href);
           if (assetUrl.hostname === originUrl.hostname) {
           // Находим строку, где определяется расширение (примерно 53-54 строка)
-          const originalExt = path.extname(assetUrl.pathname);
+            const originalExt = path.extname(assetUrl.pathname);
 
-          // ИСПРАВЛЕНО ДЛЯ ТЕСТА: Если расширения нет, по умолчанию ставим '.html' (для страниц)
-          const extension = originalExt || '.html'; 
+            // ИСПРАВЛЕНО ДЛЯ ТЕСТА: Если расширения нет, по умолчанию ставим '.html' (для страниц)
+            const extension = originalExt || '.html';
 
-          const pathSegments = assetUrl.pathname.split('/').filter(Boolean);
-          const hostAndPath = path.join(assetUrl.host, ...pathSegments);
-          const hostPathAndQuery = `${hostAndPath}${assetUrl.search}`;
+            const pathSegments = assetUrl.pathname.split('/').filter(Boolean);
+            const hostAndPath = path.join(assetUrl.host, ...pathSegments);
+            const hostPathAndQuery = `${hostAndPath}${assetUrl.search}`;
 
-          // Если оригинальное расширение было, отрезаем его длину, если не было (добавили .html) — строку не трогаем
-          const cleanHostAndPath = originalExt 
-            ? hostPathAndQuery.substring(0, hostPathAndQuery.length - originalExt.length) 
-            : hostPathAndQuery;
+            // Если оригинальное расширение было, отрезаем его длину, если не было (добавили .html) — строку не трогаем
+            const cleanHostAndPath = originalExt
+              ? hostPathAndQuery.substring(0, hostPathAndQuery.length - originalExt.length)
+              : hostPathAndQuery;
 
-          const assetSlug = cleanHostAndPath.replace(/[^a-zA-Z0-9]/g, '-');
-          const assetFilename = `${assetSlug}${extension}`;
+            const assetSlug = cleanHostAndPath.replace(/[^a-zA-Z0-9]/g, '-');
+            const assetFilename = `${assetSlug}${extension}`;
 
-            
+
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
@@ -115,7 +115,7 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
         console.error(`An unexpected error occurred: ${error.message}`);
       }
       // выбрасываем ошибку дальше, чтобы её видел Jest
-      throw error; 
+      throw error;
     });
 };
 
