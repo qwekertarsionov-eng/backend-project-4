@@ -31,7 +31,8 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
   const originUrl = new URL(pageUrl);
   let assetsToDownload = [];
 
-  return fs.mkdir(outputDir, { recursive: true })
+  // ИСПРАВЛЕНО ДЛЯ ТЕСТОВ ХЕКСЛЕТА: Возвращаем fs.access. Папка должна существовать, иначе падаем с ошибкой
+  return fs.access(outputDir)
     .then(() => {
       logApi('sending GET request to main page: %s', pageUrl);
       return axios.get(pageUrl);
@@ -45,25 +46,19 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           if (!attrValue) return;
           const assetUrl = new URL(attrValue, originUrl.href);
           if (assetUrl.hostname === originUrl.hostname) {
-          // Находим строку, где определяется расширение (примерно 53-54 строка)
             const originalExt = path.extname(assetUrl.pathname);
-
-            // ИСПРАВЛЕНО ДЛЯ ТЕСТА: Если расширения нет, по умолчанию ставим '.html' (для страниц)
             const extension = originalExt || '.html';
 
             const pathSegments = assetUrl.pathname.split('/').filter(Boolean);
             const hostAndPath = path.join(assetUrl.host, ...pathSegments);
             const hostPathAndQuery = `${hostAndPath}${assetUrl.search}`;
 
-            // Если оригинальное расширение было, отрезаем его длину, если не было (добавили .html) — строку не трогаем
             const cleanHostAndPath = originalExt
               ? hostPathAndQuery.substring(0, hostPathAndQuery.length - originalExt.length)
               : hostPathAndQuery;
 
             const assetSlug = cleanHostAndPath.replace(/[^a-zA-Z0-9]/g, '-');
             const assetFilename = `${assetSlug}${extension}`;
-
-
             const localPathForHtml = path.join(assetsDirname, assetFilename);
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
@@ -90,10 +85,9 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
             logApi('downloading asset: %s', asset.downloadUrl);
             return axios.get(asset.downloadUrl, { responseType: 'arraybuffer' })
               .then((res) => fs.writeFile(asset.savePath, res.data))
-              // Перехватываем ошибку каждого конкретного файла индивидуально
               .catch((assetError) => {
                 logApi('Warning: asset %s failed to download (%s)', asset.downloadUrl, assetError.message);
-                return null; // Возвращаем пустой результат, чтобы Promise.all НЕ падал целиком
+                return null;
               });
           });
           return Promise.all(promises);
@@ -114,9 +108,9 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
       } else {
         console.error(`An unexpected error occurred: ${error.message}`);
       }
-      // выбрасываем ошибку дальше, чтобы её видел Jest
       throw error;
     });
 };
 
 export default pageLoader;
+
