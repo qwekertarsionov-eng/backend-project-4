@@ -31,7 +31,6 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
   const originUrl = new URL(pageUrl);
   let assetsToDownload = [];
 
-  // ИСПРАВЛЕНО ДЛЯ ТЕСТОВ ХЕКСЛЕТА: Возвращаем fs.access. Папка должна существовать, иначе падаем с ошибкой
   return fs.access(outputDir)
     .then(() => {
       logApi('sending GET request to main page: %s', pageUrl);
@@ -45,21 +44,24 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
           const attrValue = $(element).attr(attrName);
           if (!attrValue) return;
           const assetUrl = new URL(attrValue, originUrl.href);
+
           if (assetUrl.hostname === originUrl.hostname) {
             const originalExt = path.extname(assetUrl.pathname);
             const extension = originalExt || '.html';
 
-            const pathSegments = assetUrl.pathname.split('/').filter(Boolean);
-            const hostAndPath = path.join(assetUrl.host, ...pathSegments);
-            const hostPathAndQuery = `${hostAndPath}${assetUrl.search}`;
+            // Работаем с чистым pathname БЕЗ query-параметров для удаления расширения
+            const pathWithoutExt = originalExt
+              ? assetUrl.pathname.substring(0, assetUrl.pathname.length - originalExt.length)
+              : assetUrl.pathname;
 
-            const cleanHostAndPath = originalExt
-              ? hostPathAndQuery.substring(0, hostPathAndQuery.length - originalExt.length)
-              : hostPathAndQuery;
-
+            // Теперь собираем слаг из хоста, чистого пути (без расширения) и query-параметров
+            const cleanHostAndPath = `${assetUrl.host}${pathWithoutExt}${assetUrl.search}`;
             const assetSlug = cleanHostAndPath.replace(/[^a-zA-Z0-9]/g, '-');
             const assetFilename = `${assetSlug}${extension}`;
-            const localPathForHtml = path.join(assetsDirname, assetFilename);
+
+            // (Замечание про Windows): Внутрь HTML пишем строго через прямой слэш "/"
+            const localPathForHtml = `${assetsDirname}/${assetFilename}`;
+            // Для сохранения на диск операционной системы по-прежнему используем path.join
             const absoluteSavePath = path.join(assetsDirPath, assetFilename);
 
             assetsToDownload.push({
@@ -113,4 +115,3 @@ const pageLoader = (pageUrl, outputDir = process.cwd()) => {
 };
 
 export default pageLoader;
-

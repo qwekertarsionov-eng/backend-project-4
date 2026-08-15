@@ -18,6 +18,10 @@ program
         if (savedPath) {
           console.log(`Success: Page was successfully downloaded into ${savedPath}`);
         }
+      })
+      // ИСПРАВЛЕНО: Перехватываем проброшенную ошибку ядра и корректно выходим из CLI
+      .catch(() => {
+        process.exit(1);
       });
   });
 
